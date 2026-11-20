@@ -21,7 +21,7 @@ class Settings:
 
         # Gemini LLM Settings
         self.GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
-        self.GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
+        self.GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
 
         # Database Settings
         # Support default local sqlite path with relative-to-base resolution

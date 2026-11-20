@@ -22,6 +22,7 @@ def test_10_invalid_column_error_detection(db_manager):
 def test_11_self_correction_workflow():
     """Test 11: Assert reflection node diagnoses column error and successfully corrects SQL."""
     llm = LLMService()
+    llm.is_demo_mode = True
     user_query = "Show orders sorted by date."
     schema_info = "Table: orders\n    - id (INTEGER)\n    - order_date (DATE)\n    - total_amount (FLOAT)"
     failed_sql = "SELECT * FROM orders ORDER BY created_at;"
@@ -41,14 +42,35 @@ def test_11_self_correction_workflow():
 def test_gemini_failure_is_logged_before_deterministic_fallback(caplog):
     """Make live-provider failures visible instead of silently masking them."""
     llm = LLMService()
-    llm._gemini_llm = Mock()
-    llm._gemini_llm.invoke.side_effect = RuntimeError("provider unavailable")
+    llm.is_demo_mode = False
+    llm._gemini_client = Mock()
+    llm._gemini_client.interactions.create.side_effect = RuntimeError("provider unavailable")
 
     sql = llm.generate_sql("Calculate total revenue", "Table: orders")
 
     assert "SUM(total_amount)" in sql
     assert "Gemini SQL generation failed (RuntimeError)" in caplog.text
     assert llm.last_provider_error == "RuntimeError"
+
+
+def test_gemini_sql_uses_stateless_interactions_api():
+    llm = LLMService()
+    llm.is_demo_mode = False
+    llm._gemini_client = Mock()
+    llm._gemini_client.interactions.create.return_value.output_text = (
+        "```sql\nSELECT id FROM customers;\n```"
+    )
+
+    sql = llm.generate_sql("List customers", "Table: customers")
+
+    assert sql == "SELECT id FROM customers;"
+    llm._gemini_client.interactions.create.assert_called_once()
+    call = llm._gemini_client.interactions.create.call_args.kwargs
+    assert call["model"]
+    assert call["store"] is False
+    assert call["generation_config"]["thinking_level"] == "minimal"
+    assert "List customers" in call["input"]
+    assert "Table: customers" in call["input"]
 
 
 def test_12_maximum_3_retries_enforcement():

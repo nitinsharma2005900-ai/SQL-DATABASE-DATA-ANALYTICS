@@ -28,6 +28,14 @@ def test_db_path(tmp_path_factory):
     db_manager.close()
 
 
+@pytest.fixture(autouse=True)
+def disable_live_gemini_for_tests(monkeypatch):
+    """Keep graph tests deterministic and avoid calling the configured live API."""
+    from src.agent.llm import llm_service
+
+    monkeypatch.setattr(llm_service, "is_demo_mode", True)
+
+
 @pytest.fixture
 def db_manager(test_db_path):
     """Return DatabaseManager connected to test database."""

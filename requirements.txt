@@ -1,7 +1,7 @@
 # Core Agent Framework
 langchain>=1.5.0
 langchain-core>=1.8.0
-langchain-google-genai>=4.5.0
+google-genai>=3.6.1
 langgraph>=1.2.0
 
 # Database & SQL

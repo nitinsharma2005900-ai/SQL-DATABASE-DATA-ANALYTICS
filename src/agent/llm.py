@@ -13,24 +13,23 @@ class LLMService:
 
     def __init__(self) -> None:
         self.is_demo_mode = settings.is_demo_mode
-        self._gemini_llm = None
+        self._gemini_client = None
         self.last_provider_error: Optional[str] = None
         if not self.is_demo_mode:
             self._init_gemini()
 
     def _init_gemini(self) -> None:
-        """Initialize LangChain Google GenAI client."""
+        """Initialize the Google GenAI client for Gemini Interactions."""
         try:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            self._gemini_llm = ChatGoogleGenerativeAI(
-                model=settings.GEMINI_MODEL,
-                google_api_key=settings.GEMINI_API_KEY,
-                temperature=0.0,
-                retries=0,
-                request_timeout=15,
+            from google import genai
+            from google.genai import types
+
+            self._gemini_client = genai.Client(
+                api_key=settings.GEMINI_API_KEY,
+                http_options=types.HttpOptions(timeout=30_000),
             )
         except Exception as exc:
-            self._gemini_llm = None
+            self._gemini_client = None
             self.is_demo_mode = True
             self.last_provider_error = type(exc).__name__
             logger.warning(
@@ -46,10 +45,29 @@ class LLMService:
         cleaned = re.sub(r"\s*```$", "", cleaned)
         return cleaned.strip()
 
+    def _invoke_gemini(self, prompt: str) -> str:
+        """Generate a stateless response through Google's recommended API."""
+        client = self._gemini_client
+        if client is None:
+            raise RuntimeError("Gemini client is not initialized.")
+        interaction = client.interactions.create(
+            model=settings.GEMINI_MODEL,
+            input=prompt,
+            store=False,
+            generation_config={
+                "thinking_level": "minimal",
+                "max_output_tokens": 512,
+            },
+        )
+        content = interaction.output_text
+        if not content:
+            raise ValueError("Gemini returned an empty response.")
+        return str(content)
+
     def generate_sql(self, user_query: str, schema_info: str, retry_count: int = 0) -> str:
         """Convert natural language prompt to SELECT SQL."""
         self.last_provider_error = None
-        if self._gemini_llm and not self.is_demo_mode:
+        if self._gemini_client and not self.is_demo_mode:
             try:
                 system_prompt = (
                     "You are a database analytics engineer. Convert the user question into a valid, safe, read-only SELECT SQL query.\n"
@@ -58,13 +76,9 @@ class LLMService:
                     "2. NEVER invent table or column names. Strictly adhere to the provided schema.\n"
                     "3. Return ONLY the raw SQL statement. Do not add markdown fences, commentary, or explanations.\n"
                     f"SCHEMA:\n{schema_info}\n"
+                    f"USER QUESTION:\n{user_query}"
                 )
-                messages = [
-                    ("system", system_prompt),
-                    ("human", user_query),
-                ]
-                response = self._gemini_llm.invoke(messages)
-                content = str(response.content) if hasattr(response, "content") else str(response)
+                content = self._invoke_gemini(system_prompt)
                 return self._clean_sql(content)
             except Exception as exc:
                 self.last_provider_error = type(exc).__name__
@@ -85,7 +99,7 @@ class LLMService:
     ) -> str:
         """Analyze database execution failure and generate corrected SQL."""
         self.last_provider_error = None
-        if self._gemini_llm and not self.is_demo_mode:
+        if self._gemini_client and not self.is_demo_mode:
             try:
                 reflection_prompt = (
                     "You are an expert SQL debugger. The previous SQL query failed during execution on the database.\n"
@@ -99,8 +113,7 @@ class LLMService:
                     "3. Rewrite the query so that it executes successfully.\n"
                     "4. Return ONLY the corrected SQL query without markdown or explanations.\n"
                 )
-                response = self._gemini_llm.invoke([("human", reflection_prompt)])
-                content = str(response.content) if hasattr(response, "content") else str(response)
+                content = self._invoke_gemini(reflection_prompt)
                 return self._clean_sql(content)
             except Exception as exc:
                 self.last_provider_error = type(exc).__name__

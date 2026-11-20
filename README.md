@@ -26,7 +26,7 @@ cp .env.example .env
 Set your configuration in `.env`:
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here  # Optional: runs in Demo Mode if left blank
-GEMINI_MODEL=gemini-3.8-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 DATABASE_URL=sqlite:///./data/analytics.db
 MAX_RETRIES=3
 READ_ONLY_MODE=true
