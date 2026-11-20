@@ -1,0 +1,13 @@
+# NeMo Guardrails Configuration
+models:
+  - type: main
+    engine: google_genai
+    model: gemini-1.5-flash
+
+rails:
+  input:
+    flows:
+      - check sql injection
+      - check destructive sql
+      - check prompt injection
+      - check script tags
